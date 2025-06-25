@@ -31,7 +31,8 @@ async function getClient() {
       walletProvider: walletProvider2
     });
     const exportedWallet = await walletProvider2.exportWallet();
-    fs.writeFileSync(WALLET_DATA_FILE, exportedWallet);
+    const walletDataToSave = typeof exportedWallet === "string" ? exportedWallet : JSON.stringify(exportedWallet);
+    fs.writeFileSync(WALLET_DATA_FILE, walletDataToSave);
     return agentKit;
   } catch (error) {
     console.error("Failed to initialize AgentKit:", error);
@@ -160,7 +161,7 @@ console.log("\n\u250C\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255
 console.log("\u2502          AGENTKIT PLUGIN               \u2502");
 console.log("\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524");
 console.log("\u2502  Initializing AgentKit Plugin...       \u2502");
-console.log("\u2502  Version: 0.25.6-alpha.2 (Updated)    \u2502");
+console.log("\u2502  Version: 0.25.6-alpha.3 (Updated)    \u2502");
 console.log("\u2514\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2518");
 var initializeActions = async () => {
   try {

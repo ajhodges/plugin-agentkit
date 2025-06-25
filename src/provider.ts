@@ -44,9 +44,12 @@ export async function getClient(): Promise<AgentKit> {
             walletProvider,
         });
 
-        // Save wallet data for persistence
+        // Save wallet data for persistence - convert object to JSON string
         const exportedWallet = await walletProvider.exportWallet();
-        fs.writeFileSync(WALLET_DATA_FILE, exportedWallet);
+        const walletDataToSave = typeof exportedWallet === 'string' 
+            ? exportedWallet 
+            : JSON.stringify(exportedWallet);
+        fs.writeFileSync(WALLET_DATA_FILE, walletDataToSave);
 
         return agentKit;
     } catch (error) {
