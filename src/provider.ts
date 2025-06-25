@@ -34,7 +34,7 @@ export const getClient = async (): Promise<AgentKit> => {
             try {
                 const walletDataStr = fs.readFileSync(walletDataPath, 'utf8');
                 console.log('Loading existing wallet...');
-                
+
                 walletProvider = await CdpWalletProvider.configureWithWallet({
                     cdpWalletData: walletDataStr,
                     networkId,
@@ -59,7 +59,7 @@ export const getClient = async (): Promise<AgentKit> => {
                 typeof exportedWallet === 'string'
                     ? exportedWallet
                     : JSON.stringify(exportedWallet);
-            
+
             fs.writeFileSync(walletDataPath, walletDataToSave);
             console.log('Wallet data saved to wallet_data.txt');
         }
@@ -69,7 +69,8 @@ export const getClient = async (): Promise<AgentKit> => {
         });
 
         // Store wallet provider for later access
-        (client as AgentKit & { _walletProvider?: CdpWalletProvider })._walletProvider = walletProvider;
+        (client as AgentKit & { _walletProvider?: CdpWalletProvider })._walletProvider =
+            walletProvider;
 
         console.log('✅ AgentKit initialized successfully');
         return client;
@@ -84,8 +85,9 @@ export const walletProvider: Provider = {
         try {
             const client = await getClient();
             // Get wallet address from the stored wallet provider
-            const storedWalletProvider = (client as AgentKit & { _walletProvider?: { address?: string } })
-                ._walletProvider;
+            const storedWalletProvider = (
+                client as AgentKit & { _walletProvider?: { address?: string } }
+            )._walletProvider;
             if (storedWalletProvider?.address) {
                 return `AgentKit Wallet Address: ${storedWalletProvider.address}`;
             }

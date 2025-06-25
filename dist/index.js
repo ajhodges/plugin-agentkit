@@ -72,102 +72,118 @@ var walletProvider = {
 
 // src/actions.ts
 import { getLangChainTools } from "@coinbase/agentkit-langchain";
-var composeParameterContext = (tool, state) => {
-  return `You are an AI agent with access to the ${tool.name} action.
-    
-Tool Description: ${tool.description}
+var parameterExtractionTemplate = `
+Based on the user's message and the tool description, extract the required parameters in JSON format.
 
-Current conversation context:
-${state.recentMessagesData.map((msg) => {
-    var _a, _b;
-    return `${((_a = msg.user) == null ? void 0 : _a.name) || "User"}: ${((_b = msg.content) == null ? void 0 : _b.text) || ""}`;
-  }).join("\n")}
+User Message: "{{message.content.text}}"
+Tool: {{toolName}}
+Tool Description: {{toolDescription}}
 
-Based on this context, determine the appropriate parameters for the ${tool.name} action.
-If no specific parameters are mentioned, use reasonable defaults or ask for clarification.`;
-};
-var composeResponseContext = (tool, result, state) => {
-  return `You have successfully executed the ${tool.name} action.
+{{#if toolSchema}}
+Tool Schema: {{toolSchema}}
+{{/if}}
 
-Result: ${JSON.stringify(result, null, 2)}
+Instructions:
+- Extract only the parameters that the tool requires
+- Use the tool's schema to understand parameter types and requirements
+- If a parameter is not mentioned in the message, omit it or use null
+- Return valid JSON only, no explanations
 
-Please provide a natural, conversational response to the user about what was accomplished.
-Be specific about the results but keep the tone friendly and helpful.
+Example format:
+{
+  "parameter1": "value1",
+  "parameter2": 123,
+  "parameter3": true
+}
 
-Current context:
-${state.recentMessagesData.slice(-3).map((msg) => {
-    var _a, _b;
-    return `${((_a = msg.user) == null ? void 0 : _a.name) || "User"}: ${((_b = msg.content) == null ? void 0 : _b.text) || ""}`;
-  }).join("\n")}`;
-};
-var generateParameters = async (runtime, parameterContext, tool) => {
-  if (!tool.schema || Object.keys(tool.schema).length === 0) {
-    return {};
-  }
-  const response = await runtime.generateText({
-    context: parameterContext,
-    modelClass: "SMALL",
-    stop: ["\n"]
-  });
+Extract parameters:`;
+async function extractParameters(runtime, message, tool) {
+  var _a, _b;
   try {
-    return JSON.parse(response);
-  } catch {
+    console.log(`\u{1F50D} Extracting parameters for tool: ${tool.name}`);
+    const toolSchema = tool.schema ? JSON.stringify(tool.schema, null, 2) : void 0;
+    const extractionPrompt = parameterExtractionTemplate.replace("{{message.content.text}}", ((_a = message.content) == null ? void 0 : _a.text) || "").replace("{{toolName}}", tool.name).replace("{{toolDescription}}", tool.description).replace("{{toolSchema}}", toolSchema || "No schema available");
+    const response = await runtime.generateText({
+      context: extractionPrompt,
+      modelClass: "SMALL"
+    });
+    const cleanedResponse = response.trim().replace(/^```json\s*|\s*```$/g, "");
+    let parameters;
+    try {
+      parameters = JSON.parse(cleanedResponse);
+    } catch (_parseError) {
+      console.warn(`\u26A0\uFE0F Failed to parse parameters as JSON: ${cleanedResponse}`);
+      parameters = extractSimpleParameters(((_b = message.content) == null ? void 0 : _b.text) || "");
+    }
+    console.log("\u2705 Extracted parameters:", parameters);
+    return parameters;
+  } catch (error) {
+    console.error("\u274C Error extracting parameters:", error);
     return {};
   }
-};
-var executeToolAction = async (tool, parameters) => {
-  console.log(`\u{1F3AF} Executing AgentKit tool: ${tool.name} with parameters:`, parameters);
-  const result = await tool.invoke(parameters);
-  console.log(`\u2705 Tool ${tool.name} completed with result:`, result);
-  return result;
-};
-var generateResponse = async (runtime, responseContext) => {
-  return await runtime.generateText({
-    context: responseContext,
-    modelClass: "SMALL",
-    stop: ["\n\n"]
-  });
-};
+}
+function extractSimpleParameters(text) {
+  const params = {};
+  const patterns = {
+    amount: /(\d+(?:\.\d+)?)\s*(?:tokens?|coins?|eth|matic|sol)?/i,
+    address: /(0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})/,
+    recipient: /(?:to|send to|transfer to)\s+([a-zA-Z0-9]{32,44})/i,
+    symbol: /(?:symbol|ticker)\s+([A-Z]{2,6})/i
+  };
+  for (const [key, pattern] of Object.entries(patterns)) {
+    const match = text.match(pattern);
+    if (match) {
+      params[key] = match[1];
+    }
+  }
+  return params;
+}
 async function getAgentKitActions({
   getClient: getClient2
 }) {
-  const agentKit = await getClient2();
-  const tools = await getLangChainTools(agentKit);
-  console.log(
-    "\u{1F527} Available AgentKit tools:",
-    tools.map((tool) => ({
-      name: tool.name,
-      description: `${tool.description.substring(0, 100)}...`
-    }))
-  );
+  console.log("\u{1F527} Setting up AgentKit tools...");
+  const agentkit = await getClient2();
+  const tools = getLangChainTools({ agentkit });
+  console.log(`\u{1F4CB} Found ${tools.length} AgentKit tools`);
   const actions2 = tools.map((tool) => ({
-    name: tool.name.toUpperCase().replace(/-/g, "_"),
-    description: tool.description,
+    name: tool.name.toUpperCase(),
     similes: [],
+    description: tool.description,
     validate: async () => true,
-    handler: async (runtime, message, state, _options, callback) => {
-      var _a;
+    handler: async (runtime, message, _state, _options, callback) => {
       try {
-        console.log(
-          `\u{1F680} Handling action ${tool.name} for message: ${(_a = message.content) == null ? void 0 : _a.text}`
-        );
-        const _client = await getClient2();
-        let currentState = state ?? await runtime.composeState(message);
-        currentState = await runtime.updateRecentMessageState(currentState);
-        const parameterContext = composeParameterContext(tool, currentState);
-        const parameters = await generateParameters(runtime, parameterContext, tool);
-        const result = await executeToolAction(tool, parameters);
-        const responseContext = composeResponseContext(tool, result, currentState);
-        const response = await generateResponse(runtime, responseContext);
-        callback == null ? void 0 : callback({ text: response, content: result });
+        console.log(`\u{1F680} Executing AgentKit action: ${tool.name}`);
+        const parameters = await extractParameters(runtime, message, tool);
+        const result = await tool.invoke(parameters);
+        const response = typeof result === "string" ? result : JSON.stringify(result);
+        if (callback) {
+          callback({
+            text: response,
+            content: {
+              text: response,
+              action: tool.name,
+              parameters,
+              source: "agentkit",
+              success: true
+            }
+          });
+        }
         return true;
       } catch (error) {
-        console.error(`\u274C Error executing AgentKit action ${tool.name}:`, error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        callback == null ? void 0 : callback({
-          text: `Sorry, I encountered an error while executing ${tool.name}: ${errorMessage}`,
-          content: { error: errorMessage }
-        });
+        console.error(`\u274C Error executing ${tool.name}:`, error);
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        if (callback) {
+          callback({
+            text: `Error executing ${tool.name}: ${errorMessage}`,
+            content: {
+              text: `Failed to execute ${tool.name}`,
+              error: errorMessage,
+              action: tool.name,
+              source: "agentkit",
+              success: false
+            }
+          });
+        }
         return false;
       }
     },
@@ -188,7 +204,7 @@ console.log("\n\u250C\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255
 console.log("\u2502          AGENTKIT PLUGIN               \u2502");
 console.log("\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524");
 console.log("\u2502  Initializing AgentKit Plugin...       \u2502");
-console.log("\u2502  Version: 0.25.6-alpha.7               \u2502");
+console.log("\u2502  Version: 0.25.6-alpha.8 (Runtime Fix)\u2502");
 console.log("\u2514\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2518");
 var initializeActions = async () => {
   try {

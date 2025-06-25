@@ -89,12 +89,12 @@ describe('AgentKit Provider', () => {
             expect(client).toBe(mockClient);
         });
 
-                it('should handle file read errors gracefully', async () => {
+        it('should handle file read errors gracefully', async () => {
             vi.mocked(fs.existsSync).mockReturnValue(true);
             vi.mocked(fs.readFileSync).mockImplementation(() => {
                 throw new Error('File read error');
             });
-            
+
             await expect(getClient()).rejects.toThrow('File read error');
         });
 

@@ -7,7 +7,7 @@ console.log('\n┌════════════════════�
 console.log('│          AGENTKIT PLUGIN               │');
 console.log('├────────────────────────────────────────┤');
 console.log('│  Initializing AgentKit Plugin...       │');
-console.log('│  Version: 0.25.6-alpha.7               │');
+console.log('│  Version: 0.25.6-alpha.8 (Runtime Fix)│');
 console.log('└════════════════════════════════════════┘');
 
 const initializeActions = async (): Promise<Action[]> => {
