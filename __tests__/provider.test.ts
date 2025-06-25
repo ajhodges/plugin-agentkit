@@ -7,10 +7,7 @@ import * as fs from 'node:fs';
 vi.mock('@coinbase/agentkit', () => ({
     AgentKit: {
         from: vi.fn().mockImplementation(async ({ walletProvider: _walletProvider }) => ({
-            getWalletDetails: vi.fn().mockResolvedValue({
-                address: '0x123...abc',
-                networkId: 'base-sepolia',
-            }),
+            // AgentKit instance doesn't need getWalletDetails anymore
         })),
     },
     CdpWalletProvider: {
@@ -65,7 +62,10 @@ describe('AgentKit Provider', () => {
             expect(AgentKit.from).toHaveBeenCalledWith({
                 walletProvider: expect.any(Object),
             });
-            expect(fs.writeFileSync).toHaveBeenCalledWith('wallet_data.txt', JSON.stringify({ walletId: 'test-wallet', seed: 'test-seed' }));
+            expect(fs.writeFileSync).toHaveBeenCalledWith(
+                'wallet_data.txt',
+                JSON.stringify({ walletId: 'test-wallet', seed: 'test-seed' })
+            );
             expect(client).toBeDefined();
         });
 
@@ -84,7 +84,10 @@ describe('AgentKit Provider', () => {
             expect(AgentKit.from).toHaveBeenCalledWith({
                 walletProvider: expect.any(Object),
             });
-            expect(fs.writeFileSync).toHaveBeenCalledWith('wallet_data.txt', JSON.stringify({ walletId: 'test-wallet', seed: 'test-seed' }));
+            expect(fs.writeFileSync).toHaveBeenCalledWith(
+                'wallet_data.txt',
+                JSON.stringify({ walletId: 'test-wallet', seed: 'test-seed' })
+            );
             expect(client).toBeDefined();
         });
 
@@ -105,7 +108,10 @@ describe('AgentKit Provider', () => {
             expect(AgentKit.from).toHaveBeenCalledWith({
                 walletProvider: expect.any(Object),
             });
-            expect(fs.writeFileSync).toHaveBeenCalledWith('wallet_data.txt', JSON.stringify({ walletId: 'test-wallet', seed: 'test-seed' }));
+            expect(fs.writeFileSync).toHaveBeenCalledWith(
+                'wallet_data.txt',
+                JSON.stringify({ walletId: 'test-wallet', seed: 'test-seed' })
+            );
             expect(client).toBeDefined();
         });
 
@@ -138,12 +144,14 @@ describe('AgentKit Provider', () => {
                 exportWallet: vi.fn().mockResolvedValue('string-wallet-data'),
                 address: '0x123...abc',
             };
-            
-            vi.mocked(CdpWalletProvider.configureWithWallet).mockResolvedValueOnce(mockWalletProvider);
+
+            vi.mocked(CdpWalletProvider.configureWithWallet).mockResolvedValueOnce(
+                mockWalletProvider
+            );
             vi.mocked(fs.existsSync).mockReturnValue(false);
 
             const client = await getClient();
-            
+
             expect(fs.writeFileSync).toHaveBeenCalledWith('wallet_data.txt', 'string-wallet-data');
             expect(client).toBeDefined();
         });
@@ -152,6 +160,14 @@ describe('AgentKit Provider', () => {
     describe('walletProvider', () => {
         it('should return wallet address', async () => {
             vi.mocked(fs.existsSync).mockReturnValue(false);
+
+            // Mock AgentKit.from to return an instance with _walletProvider
+            const mockAgentKit = {
+                _walletProvider: {
+                    address: '0x123...abc',
+                },
+            };
+            vi.mocked(AgentKit.from).mockResolvedValueOnce(mockAgentKit);
 
             const result = await walletProvider.get(mockRuntime);
             expect(result).toBe('AgentKit Wallet Address: 0x123...abc');

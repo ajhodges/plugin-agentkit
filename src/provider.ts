@@ -44,11 +44,13 @@ export async function getClient(): Promise<AgentKit> {
             walletProvider,
         });
 
+        // Store wallet provider for later access
+        (agentKit as { _walletProvider?: { address?: string } })._walletProvider = walletProvider;
+
         // Save wallet data for persistence - convert object to JSON string
         const exportedWallet = await walletProvider.exportWallet();
-        const walletDataToSave = typeof exportedWallet === 'string' 
-            ? exportedWallet 
-            : JSON.stringify(exportedWallet);
+        const walletDataToSave =
+            typeof exportedWallet === 'string' ? exportedWallet : JSON.stringify(exportedWallet);
         fs.writeFileSync(WALLET_DATA_FILE, walletDataToSave);
 
         return agentKit;
@@ -62,8 +64,39 @@ export const walletProvider: Provider = {
     async get(_runtime: IAgentRuntime): Promise<string | null> {
         try {
             const client = await getClient();
-            const walletInfo = await client.getWalletDetails();
-            return `AgentKit Wallet Address: ${walletInfo.address}`;
+            // Get wallet address from the stored wallet provider
+            const storedWalletProvider = (client as { _walletProvider?: { address?: string } })
+                ._walletProvider;
+            if (storedWalletProvider?.address) {
+                return `AgentKit Wallet Address: ${storedWalletProvider.address}`;
+            }
+
+            // Fallback: Try to get address from the CDP wallet provider configuration
+            const apiKeyId = process.env.CDP_API_KEY_ID;
+            const apiKeySecret = process.env.CDP_API_KEY_SECRET;
+            const networkId = process.env.NETWORK_ID || 'base-sepolia';
+
+            if (apiKeyId && apiKeySecret) {
+                let walletDataStr: string | null = null;
+                if (fs.existsSync(WALLET_DATA_FILE)) {
+                    try {
+                        walletDataStr = fs.readFileSync(WALLET_DATA_FILE, 'utf8');
+                    } catch (_error) {
+                        // Ignore read errors
+                    }
+                }
+
+                const walletProvider = await CdpWalletProvider.configureWithWallet({
+                    apiKeyId,
+                    apiKeyPrivate: apiKeySecret,
+                    networkId,
+                    cdpWalletData: walletDataStr || undefined,
+                });
+
+                return `AgentKit Wallet Address: ${walletProvider.address}`;
+            }
+
+            return 'AgentKit Wallet: Unable to determine address';
         } catch (error) {
             console.error('Error in AgentKit provider:', error);
             return `Error initializing AgentKit wallet: ${error.message}`;

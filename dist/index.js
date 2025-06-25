@@ -30,6 +30,7 @@ async function getClient() {
     const agentKit = await AgentKit.from({
       walletProvider: walletProvider2
     });
+    agentKit._walletProvider = walletProvider2;
     const exportedWallet = await walletProvider2.exportWallet();
     const walletDataToSave = typeof exportedWallet === "string" ? exportedWallet : JSON.stringify(exportedWallet);
     fs.writeFileSync(WALLET_DATA_FILE, walletDataToSave);
@@ -43,8 +44,30 @@ var walletProvider = {
   async get(_runtime) {
     try {
       const client = await getClient();
-      const walletInfo = await client.getWalletDetails();
-      return `AgentKit Wallet Address: ${walletInfo.address}`;
+      const storedWalletProvider = client._walletProvider;
+      if (storedWalletProvider == null ? void 0 : storedWalletProvider.address) {
+        return `AgentKit Wallet Address: ${storedWalletProvider.address}`;
+      }
+      const apiKeyId = process.env.CDP_API_KEY_ID;
+      const apiKeySecret = process.env.CDP_API_KEY_SECRET;
+      const networkId = process.env.NETWORK_ID || "base-sepolia";
+      if (apiKeyId && apiKeySecret) {
+        let walletDataStr = null;
+        if (fs.existsSync(WALLET_DATA_FILE)) {
+          try {
+            walletDataStr = fs.readFileSync(WALLET_DATA_FILE, "utf8");
+          } catch (_error) {
+          }
+        }
+        const walletProvider2 = await CdpWalletProvider.configureWithWallet({
+          apiKeyId,
+          apiKeyPrivate: apiKeySecret,
+          networkId,
+          cdpWalletData: walletDataStr || void 0
+        });
+        return `AgentKit Wallet Address: ${walletProvider2.address}`;
+      }
+      return "AgentKit Wallet: Unable to determine address";
     } catch (error) {
       console.error("Error in AgentKit provider:", error);
       return `Error initializing AgentKit wallet: ${error.message}`;
@@ -161,7 +184,7 @@ console.log("\n\u250C\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255
 console.log("\u2502          AGENTKIT PLUGIN               \u2502");
 console.log("\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524");
 console.log("\u2502  Initializing AgentKit Plugin...       \u2502");
-console.log("\u2502  Version: 0.25.6-alpha.3 (Updated)    \u2502");
+console.log("\u2502  Version: 0.25.6-alpha.4 (Updated)    \u2502");
 console.log("\u2514\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2518");
 var initializeActions = async () => {
   try {
