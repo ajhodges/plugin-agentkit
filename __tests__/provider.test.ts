@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getClient, walletProvider } from '../src/provider';
+import { getClient, walletProvider, resetClient } from '../src/provider';
 import { AgentKit, CdpWalletProvider } from '@coinbase/agentkit';
 import * as fs from 'node:fs';
+import path from 'node:path';
 
 // Mock dependencies
 vi.mock('@coinbase/agentkit', () => ({
@@ -18,32 +19,29 @@ vi.mock('@coinbase/agentkit', () => ({
     },
 }));
 
-vi.mock('fs', () => ({
+vi.mock('node:fs', () => ({
     existsSync: vi.fn(),
     readFileSync: vi.fn(),
     writeFileSync: vi.fn(),
 }));
 
 describe('AgentKit Provider', () => {
-    const mockRuntime = {
-        name: 'test-runtime',
-        memory: new Map(),
-        getMemory: vi.fn(),
-        setMemory: vi.fn(),
-        clearMemory: vi.fn(),
-    };
-
     beforeEach(() => {
+        // Reset all mocks
         vi.clearAllMocks();
+        // Reset environment variables
         process.env.CDP_API_KEY_ID = 'test-api-key-id';
         process.env.CDP_API_KEY_SECRET = 'test-api-key-secret';
-        process.env.NETWORK_ID = 'base-sepolia';
+        process.env.CDP_AGENT_KIT_NETWORK = 'base-sepolia';
+
+        // Reset the client singleton
+        resetClient();
     });
 
     afterEach(() => {
         delete process.env.CDP_API_KEY_ID;
         delete process.env.CDP_API_KEY_SECRET;
-        delete process.env.NETWORK_ID;
+        delete process.env.CDP_AGENT_KIT_NETWORK;
         delete process.env.CDP_WALLET_SECRET;
     });
 
@@ -63,69 +61,63 @@ describe('AgentKit Provider', () => {
                 walletProvider: expect.any(Object),
             });
             expect(fs.writeFileSync).toHaveBeenCalledWith(
-                'wallet_data.txt',
+                path.join(process.cwd(), 'wallet_data.txt'),
                 JSON.stringify({ walletId: 'test-wallet', seed: 'test-seed' })
             );
             expect(client).toBeDefined();
         });
 
         it('should use existing wallet data when available', async () => {
+            const mockWalletProvider = { address: '0x123' };
+            const mockClient = {};
+
             vi.mocked(fs.existsSync).mockReturnValue(true);
-            vi.mocked(fs.readFileSync).mockReturnValue('existing-wallet-data');
+            vi.mocked(fs.readFileSync).mockReturnValue('{"walletId":"existing-wallet"}');
+            vi.mocked(CdpWalletProvider.configureWithWallet).mockResolvedValue(mockWalletProvider);
+            vi.mocked(AgentKit.from).mockResolvedValue(mockClient);
 
             const client = await getClient();
 
             expect(CdpWalletProvider.configureWithWallet).toHaveBeenCalledWith({
+                cdpWalletData: '{"walletId":"existing-wallet"}',
+                networkId: 'base-sepolia',
                 apiKeyId: 'test-api-key-id',
                 apiKeyPrivate: 'test-api-key-secret',
-                networkId: 'base-sepolia',
-                cdpWalletData: 'existing-wallet-data',
             });
-            expect(AgentKit.from).toHaveBeenCalledWith({
-                walletProvider: expect.any(Object),
-            });
-            expect(fs.writeFileSync).toHaveBeenCalledWith(
-                'wallet_data.txt',
-                JSON.stringify({ walletId: 'test-wallet', seed: 'test-seed' })
-            );
-            expect(client).toBeDefined();
+            // Should NOT write wallet data when using existing wallet
+            expect(fs.writeFileSync).not.toHaveBeenCalled();
+            expect(client).toBe(mockClient);
         });
 
-        it('should handle file read errors gracefully', async () => {
+                it('should handle file read errors gracefully', async () => {
             vi.mocked(fs.existsSync).mockReturnValue(true);
             vi.mocked(fs.readFileSync).mockImplementation(() => {
                 throw new Error('File read error');
             });
-
-            const client = await getClient();
-
-            expect(CdpWalletProvider.configureWithWallet).toHaveBeenCalledWith({
-                apiKeyId: 'test-api-key-id',
-                apiKeyPrivate: 'test-api-key-secret',
-                networkId: 'base-sepolia',
-                cdpWalletData: undefined,
-            });
-            expect(AgentKit.from).toHaveBeenCalledWith({
-                walletProvider: expect.any(Object),
-            });
-            expect(fs.writeFileSync).toHaveBeenCalledWith(
-                'wallet_data.txt',
-                JSON.stringify({ walletId: 'test-wallet', seed: 'test-seed' })
-            );
-            expect(client).toBeDefined();
+            
+            await expect(getClient()).rejects.toThrow('File read error');
         });
 
         it('should use custom network from environment variable', async () => {
-            process.env.NETWORK_ID = 'custom-network';
+            process.env.CDP_AGENT_KIT_NETWORK = 'custom-network';
+
+            const mockWalletProvider = {
+                address: '0x123',
+                exportWallet: vi
+                    .fn()
+                    .mockResolvedValue({ walletId: 'test-wallet', seed: 'test-seed' }),
+            };
+
             vi.mocked(fs.existsSync).mockReturnValue(false);
+            vi.mocked(CdpWalletProvider.configureWithWallet).mockResolvedValue(mockWalletProvider);
+            vi.mocked(AgentKit.from).mockResolvedValue({});
 
             await getClient();
 
             expect(CdpWalletProvider.configureWithWallet).toHaveBeenCalledWith({
+                networkId: 'custom-network',
                 apiKeyId: 'test-api-key-id',
                 apiKeyPrivate: 'test-api-key-secret',
-                networkId: 'custom-network',
-                cdpWalletData: undefined,
             });
         });
 
@@ -152,33 +144,37 @@ describe('AgentKit Provider', () => {
 
             const client = await getClient();
 
-            expect(fs.writeFileSync).toHaveBeenCalledWith('wallet_data.txt', 'string-wallet-data');
+            expect(fs.writeFileSync).toHaveBeenCalledWith(
+                path.join(process.cwd(), 'wallet_data.txt'),
+                'string-wallet-data'
+            );
             expect(client).toBeDefined();
         });
     });
 
     describe('walletProvider', () => {
         it('should return wallet address', async () => {
-            vi.mocked(fs.existsSync).mockReturnValue(false);
-
-            // Mock AgentKit.from to return an instance with _walletProvider
-            const mockAgentKit = {
-                _walletProvider: {
-                    address: '0x123...abc',
-                },
+            const mockClient = {
+                _walletProvider: { address: '0x1234567890abcdef' },
             };
-            vi.mocked(AgentKit.from).mockResolvedValueOnce(mockAgentKit);
 
-            const result = await walletProvider.get(mockRuntime);
-            expect(result).toBe('AgentKit Wallet Address: 0x123...abc');
+            vi.mocked(fs.existsSync).mockReturnValue(false);
+            vi.mocked(CdpWalletProvider.configureWithWallet).mockResolvedValue({
+                address: '0x1234567890abcdef',
+                exportWallet: vi.fn().mockResolvedValue({ walletId: 'test', seed: 'test' }),
+            });
+            vi.mocked(AgentKit.from).mockResolvedValue(mockClient);
+
+            const result = await walletProvider.get();
+            expect(result).toBe('AgentKit Wallet Address: 0x1234567890abcdef');
         });
 
         it('should handle errors and return error message', async () => {
             delete process.env.CDP_API_KEY_ID;
             delete process.env.CDP_API_KEY_SECRET;
 
-            const result = await walletProvider.get(mockRuntime);
-            expect(result).toContain('Error initializing AgentKit wallet:');
+            const result = await walletProvider.get();
+            expect(result).toContain('Error: Missing required CDP API credentials');
         });
     });
 });

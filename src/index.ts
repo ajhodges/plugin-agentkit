@@ -1,4 +1,4 @@
-import type { Plugin } from '@elizaos/core';
+import type { Plugin, Action } from '@elizaos/core';
 import { walletProvider, getClient } from './provider';
 import { getAgentKitActions } from './actions';
 
@@ -7,10 +7,10 @@ console.log('\n┌════════════════════�
 console.log('│          AGENTKIT PLUGIN               │');
 console.log('├────────────────────────────────────────┤');
 console.log('│  Initializing AgentKit Plugin...       │');
-console.log('│  Version: 0.25.6-alpha.4 (Updated)    │');
+console.log('│  Version: 0.25.6-alpha.7               │');
 console.log('└════════════════════════════════════════┘');
 
-const initializeActions = async () => {
+const initializeActions = async (): Promise<Action[]> => {
     try {
         // Validate environment variables
         const apiKeyId = process.env.CDP_API_KEY_ID;
@@ -24,6 +24,7 @@ const initializeActions = async () => {
             return [];
         }
 
+        console.log('🚀 Initializing AgentKit client...');
         const actions = await getAgentKitActions({
             getClient,
         });
@@ -36,13 +37,16 @@ const initializeActions = async () => {
     }
 };
 
+// Initialize actions synchronously using top-level await
+const actions = await initializeActions();
+
 export const agentKitPlugin: Plugin = {
     name: '[AgentKit] Integration',
     description: 'AgentKit integration plugin for onchain AI agent actions',
     providers: [walletProvider],
     evaluators: [],
     services: [],
-    actions: await initializeActions(),
+    actions,
 };
 
 export default agentKitPlugin;

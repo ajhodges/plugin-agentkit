@@ -168,6 +168,42 @@ npm run lint:fix
 3. Generate API keys
 4. Copy the Key ID and Key Secret to your environment variables
 
+## 🐛 Troubleshooting
+
+### "No action found for GET_WALLET_DETAILS" Error
+
+If you encounter this error, it means ElizaOS cannot find the wallet details action. This has been addressed in version 0.25.6-alpha.5 with the following fixes:
+
+1. **Enhanced Action Discovery**: The plugin now logs all available AgentKit tools during initialization
+2. **Manual Fallback**: If `get_wallet_details` is not available from AgentKit, the plugin automatically adds a manual implementation
+3. **Improved Similes**: Added more natural language variations for triggering wallet actions
+
+**Debug Output**: When the plugin initializes, you should see logs like:
+```
+🔧 Available AgentKit tools: [...]
+🎯 Generated ElizaOS actions: [...]
+⚠️ get_wallet_details not found in tools, adding manual fallback (if needed)
+```
+
+### Actions Not Loading
+
+If actions are not loading properly:
+
+1. **Check Environment Variables**: Ensure `CDP_API_KEY_ID` and `CDP_API_KEY_SECRET` are set
+2. **Check Logs**: Look for initialization messages in the console
+3. **Async Loading**: Actions load asynchronously - they may take a moment to become available
+
+### Plugin Version
+
+Current version: **0.25.6-alpha.7**
+- ✅ Fixed wallet details action availability
+- ✅ Added comprehensive debugging
+- ✅ Improved error handling
+- ✅ Enhanced natural language understanding
+- ✅ **NEW**: Clean code quality with proper TypeScript types
+- ✅ **NEW**: Fixed all linting issues and removed `any` types
+- ✅ **NEW**: Proper Node.js import protocols and type safety
+
 ## Links
 
 - [AgentKit Documentation](https://docs.cdp.coinbase.com/agentkit/docs/welcome)

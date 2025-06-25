@@ -1,13 +1,9 @@
 import {
     type Action,
-    generateText,
     type HandlerCallback,
     type IAgentRuntime,
     type Memory,
-    ModelClass,
     type State,
-    composeContext,
-    generateObject,
 } from '@elizaos/core';
 import type { AgentKit } from '@coinbase/agentkit';
 import { getLangChainTools } from '@coinbase/agentkit-langchain';
@@ -15,9 +11,75 @@ import type { StructuredTool } from '@langchain/core/tools';
 
 type GetAgentKitActionsParams = {
     getClient: () => Promise<AgentKit>;
-    config?: {
-        networkId?: string;
-    };
+};
+
+// Helper functions for action execution
+const composeParameterContext = (tool: StructuredTool, state: State): string => {
+    return `You are an AI agent with access to the ${tool.name} action.
+    
+Tool Description: ${tool.description}
+
+Current conversation context:
+${state.recentMessagesData.map((msg) => `${msg.user?.name || 'User'}: ${msg.content?.text || ''}`).join('\n')}
+
+Based on this context, determine the appropriate parameters for the ${tool.name} action.
+If no specific parameters are mentioned, use reasonable defaults or ask for clarification.`;
+};
+
+const composeResponseContext = (tool: StructuredTool, result: unknown, state: State): string => {
+    return `You have successfully executed the ${tool.name} action.
+
+Result: ${JSON.stringify(result, null, 2)}
+
+Please provide a natural, conversational response to the user about what was accomplished.
+Be specific about the results but keep the tone friendly and helpful.
+
+Current context:
+${state.recentMessagesData
+    .slice(-3)
+    .map((msg) => `${msg.user?.name || 'User'}: ${msg.content?.text || ''}`)
+    .join('\n')}`;
+};
+
+const generateParameters = async (
+    runtime: IAgentRuntime,
+    parameterContext: string,
+    tool: StructuredTool
+): Promise<Record<string, unknown>> => {
+    // For tools that don't require parameters (like get_wallet_details), return empty object
+    if (!tool.schema || Object.keys(tool.schema).length === 0) {
+        return {};
+    }
+
+    const response = await runtime.generateText({
+        context: parameterContext,
+        modelClass: 'SMALL',
+        stop: ['\n'],
+    });
+
+    try {
+        return JSON.parse(response) as Record<string, unknown>;
+    } catch {
+        return {};
+    }
+};
+
+const executeToolAction = async (tool: StructuredTool, parameters: Record<string, unknown>): Promise<unknown> => {
+    console.log(`🎯 Executing AgentKit tool: ${tool.name} with parameters:`, parameters);
+    const result = await tool.invoke(parameters);
+    console.log(`✅ Tool ${tool.name} completed with result:`, result);
+    return result;
+};
+
+const generateResponse = async (
+    runtime: IAgentRuntime,
+    responseContext: string
+): Promise<string> => {
+    return await runtime.generateText({
+        context: responseContext,
+        modelClass: 'SMALL',
+        stop: ['\n\n'],
+    });
 };
 
 /**
@@ -29,8 +91,16 @@ export async function getAgentKitActions({
     const agentKit = await getClient();
     const tools = await getLangChainTools(agentKit);
 
+    console.log(
+        '🔧 Available AgentKit tools:',
+        tools.map((tool) => ({
+            name: tool.name,
+            description: `${tool.description.substring(0, 100)}...`,
+        }))
+    );
+
     const actions = tools.map((tool: StructuredTool) => ({
-        name: tool.name.toUpperCase().replace(/_/g, '_'),
+        name: tool.name.toUpperCase().replace(/-/g, '_'),
         description: tool.description,
         similes: [],
         validate: async () => true,
@@ -42,6 +112,10 @@ export async function getAgentKitActions({
             callback?: HandlerCallback
         ): Promise<boolean> => {
             try {
+                console.log(
+                    `🚀 Handling action ${tool.name} for message: ${message.content?.text}`
+                );
+
                 const _client = await getClient();
                 let currentState = state ?? (await runtime.composeState(message));
                 currentState = await runtime.updateRecentMessageState(currentState);
@@ -57,9 +131,10 @@ export async function getAgentKitActions({
                 callback?.({ text: response, content: result });
                 return true;
             } catch (error) {
+                console.error(`❌ Error executing AgentKit action ${tool.name}:`, error);
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 callback?.({
-                    text: `Error executing action ${tool.name}: ${errorMessage}`,
+                    text: `Sorry, I encountered an error while executing ${tool.name}: ${errorMessage}`,
                     content: { error: errorMessage },
                 });
                 return false;
@@ -67,75 +142,14 @@ export async function getAgentKitActions({
         },
         examples: [],
     }));
+
+    console.log(
+        '🎯 Generated ElizaOS actions:',
+        actions.map((action) => ({
+            name: action.name,
+            similes: action.similes.length,
+        }))
+    );
+
     return actions;
-}
-
-async function executeToolAction(tool: StructuredTool, parameters: unknown): Promise<unknown> {
-    return await tool.call(parameters);
-}
-
-function composeParameterContext(tool: StructuredTool, state: State): string {
-    const contextTemplate = `{{recentMessages}}
-
-Given the recent messages, extract the following information for the action "${tool.name}":
-${tool.description}
-
-Schema: ${JSON.stringify(tool.schema, null, 2)}
-`;
-    return composeContext({ state, template: contextTemplate });
-}
-
-async function generateParameters(
-    runtime: IAgentRuntime,
-    context: string,
-    tool: StructuredTool
-): Promise<unknown> {
-    const { object } = await generateObject({
-        runtime,
-        context,
-        modelClass: ModelClass.LARGE,
-        schema: tool.schema,
-    });
-
-    return object;
-}
-
-function composeResponseContext(tool: StructuredTool, result: unknown, state: State): string {
-    const responseTemplate = `
-# Action Examples
-{{actionExamples}}
-
-# Knowledge
-{{knowledge}}
-
-# Task: Generate dialog and actions for the character {{agentName}}.
-About {{agentName}}:
-{{bio}}
-{{lore}}
-
-{{providers}}
-
-{{attachments}}
-
-# Capabilities
-Note that {{agentName}} is capable of reading/seeing/hearing various forms of media, including images, videos, audio, plaintext and PDFs. Recent attachments have been included above under the "Attachments" section.
-
-The action "${tool.name}" was executed successfully.
-Here is the result:
-${JSON.stringify(result, null, 2)}
-
-{{actions}}
-
-Respond to the message knowing that the action was successful and these were the previous messages:
-{{recentMessages}}
-`;
-    return composeContext({ state, template: responseTemplate });
-}
-
-async function generateResponse(runtime: IAgentRuntime, context: string): Promise<string> {
-    return generateText({
-        runtime,
-        context,
-        modelClass: ModelClass.LARGE,
-    });
 }
