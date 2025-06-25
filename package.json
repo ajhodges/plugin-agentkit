@@ -1,17 +1,18 @@
 {
     "name": "@elizaos-plugins/plugin-agentkit",
-    "version": "0.25.6-alpha.1",
+    "version": "0.25.6-alpha.2",
     "main": "dist/index.js",
     "type": "module",
     "types": "dist/index.d.ts",
     "dependencies": {
-        "@coinbase/cdp-agentkit-core": "^0.0.10",
-        "@coinbase/cdp-langchain": "^0.0.11",
+        "@coinbase/agentkit": "^0.8.2",
+        "@coinbase/agentkit-langchain": "^0.3.0",
         "@langchain/core": "^0.3.27",
         "tsup": "8.3.5"
     },
     "devDependencies": {
         "@biomejs/biome": "1.9.4",
+        "@elizaos/core": "^0.1.5",
         "vitest": "^3.0.0"
     },
     "scripts": {
@@ -31,22 +32,28 @@
     "agentConfig": {
         "pluginType": "elizaos:client:1.0.0",
         "pluginParameters": {
-            "CDP_API_KEY_NAME": {
+            "CDP_API_KEY_ID": {
                 "type": "string",
                 "minLength": 1,
-                "description": "your_key_name",
+                "description": "CDP API Key ID",
                 "optional": false
             },
-            "CDP_API_KEY_PRIVATE_KEY": {
+            "CDP_API_KEY_SECRET": {
                 "type": "string",
                 "minLength": 1,
-                "description": "your_private_key",
+                "description": "CDP API Key Secret",
                 "optional": false
             },
-            "CDP_AGENT_KIT_NETWORK": {
+            "CDP_WALLET_SECRET": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Optional: Defaults to base-sepolia",
+                "description": "Optional: CDP Wallet Secret for persistent wallet",
+                "optional": true
+            },
+            "NETWORK_ID": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Optional: Network ID (defaults to base-sepolia)",
                 "optional": true
             }
         }

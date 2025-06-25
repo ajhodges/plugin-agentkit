@@ -1,123 +1,187 @@
-# @elizaos/plugin-agentkit
+# AgentKit Plugin for ElizaOS
 
-AgentKit plugin for Eliza that enables interaction with CDP AgentKit tools for NFT and token management.
+An ElizaOS plugin that integrates Coinbase's AgentKit for onchain AI agent interactions. This plugin enables your AI agents to perform blockchain operations using the latest AgentKit framework.
 
-## Setup
+## Overview
 
-1. Install dependencies:
+This plugin provides seamless integration between ElizaOS and Coinbase's AgentKit, allowing your AI agents to:
+
+- Manage crypto wallets
+- Execute onchain transactions 
+- Deploy smart contracts and tokens
+- Interact with DeFi protocols
+- Trade tokens and manage NFTs
+- And much more with 50+ built-in actions!
+
+## Recent Updates (v0.25.6-alpha.2)
+
+🎉 **Updated to support the latest AgentKit (v0.8.2)!**
+
+### Major Changes:
+- **New Package Dependencies**: Now uses `@coinbase/agentkit` and `@coinbase/agentkit-langchain`
+- **Updated Environment Variables**: `CDP_API_KEY_ID` and `CDP_API_KEY_SECRET` (see migration guide below)
+- **50+ Built-in Actions**: Automatic access to all AgentKit action providers
+- **Enhanced Architecture**: Built on the new modular action/wallet provider system
+- **Better Error Handling**: Improved error messages and validation
+
+## Installation
 
 ```bash
-pnpm install
+npm install @elizaos-plugins/plugin-agentkit
 ```
 
-2. Configure environment variables:
+## Configuration
 
-```env
+### Environment Variables
+
+⚠️ **Important**: Environment variable names have changed in the latest version.
+
+```bash
+# Required - CDP API Credentials
+CDP_API_KEY_ID=your_api_key_id          # Previously: CDP_API_KEY_NAME
+CDP_API_KEY_SECRET=your_api_key_secret  # Previously: CDP_API_KEY_PRIVATE_KEY
+
+# Optional - Network Configuration  
+NETWORK_ID=base-sepolia                 # Previously: CDP_AGENT_KIT_NETWORK
+
+# Optional - Wallet Persistence
+CDP_WALLET_SECRET=your_wallet_secret    # New: For persistent wallet management
+```
+
+### Migration from v0.0.10
+
+If you're upgrading from the old version, update your environment variables:
+
+```bash
+# Old (v0.0.10)
 CDP_API_KEY_NAME=your_key_name
 CDP_API_KEY_PRIVATE_KEY=your_private_key
-CDP_AGENT_KIT_NETWORK=base-sepolia # Optional: Defaults to base-sepolia
+CDP_AGENT_KIT_NETWORK=base-sepolia
+
+# New (v0.8.2+)
+CDP_API_KEY_ID=your_key_name
+CDP_API_KEY_SECRET=your_private_key
+NETWORK_ID=base-sepolia
 ```
 
-3. Add the plugin to your character configuration:
+## Usage
 
-```json
-{
-    "plugins": ["@elizaos/plugin-agentkit"],
-    "settings": {
-        "secrets": {
-            "CDP_API_KEY_NAME": "your_key_name",
-            "CDP_API_KEY_PRIVATE_KEY": "your_private_key"
-        }
-    }
-}
+### In your ElizaOS character configuration:
+
+```typescript
+import { agentKitPlugin } from "@elizaos-plugins/plugin-agentkit";
+
+const character = {
+    // ... your character config
+    plugins: [agentKitPlugin],
+};
 ```
 
-## Available Tools
+### Available Actions
 
-The plugin provides access to the following CDP AgentKit tools:
+The plugin automatically provides access to all AgentKit actions, including:
 
--   `GET_WALLET_DETAILS`: Get wallet information
--   `DEPLOY_NFT`: Deploy a new NFT collection
--   `DEPLOY_TOKEN`: Deploy a new token
--   `GET_BALANCE`: Check token or NFT balance
--   `MINT_NFT`: Mint NFTs from a collection
--   `REGISTER_BASENAME`: Register a basename for NFTs
--   `REQUEST_FAUCET_FUNDS`: Request testnet funds
--   `TRADE`: Execute trades
--   `TRANSFER`: Transfer tokens or NFTs
--   `WOW_BUY_TOKEN`: Buy WOW tokens
--   `WOW_SELL_TOKEN`: Sell WOW tokens
--   `WOW_CREATE_TOKEN`: Create new WOW tokens
+#### Wallet Management
+- `GET_WALLET_DETAILS` - Get wallet address and balances
+- `NATIVE_TRANSFER` - Transfer native tokens (ETH, etc.)
 
-## Usage Examples
+#### Token Operations  
+- `DEPLOY_TOKEN` - Deploy ERC-20 tokens
+- `ERC20_TRANSFER` - Transfer ERC-20 tokens
+- `ERC20_GET_BALANCE` - Check token balances
 
-1. Get wallet details:
+#### NFT Operations
+- `DEPLOY_NFT` - Deploy ERC-721 contracts
+- `ERC721_MINT` - Mint NFTs
+- `ERC721_TRANSFER` - Transfer NFTs
 
-```
-Can you show me my wallet details?
-```
+#### DeFi Protocols
+- **Compound**: `SUPPLY`, `WITHDRAW`, `BORROW`, `REPAY`
+- **Morpho**: `DEPOSIT`, `WITHDRAW`
+- **Uniswap**: `TRADE` - Token swaps
 
-2. Deploy an NFT collection:
+#### Advanced Features
+- `DEPLOY_CONTRACT` - Deploy custom smart contracts
+- `REGISTER_BASENAME` - Register .base.eth domains
+- `WRAP_ETH` - Convert ETH to WETH
+- **Cross-chain**: Bridge tokens with Across Protocol
+- **Social**: Post to Twitter/Farcaster
+- **Data**: Price feeds from Pyth, DeFiLlama research
 
-```
-Deploy a new NFT collection called "Music NFTs" with symbol "MUSIC"
-```
+And many more! The plugin automatically discovers and registers all available actions.
 
-3. Create a token:
+## Supported Networks
 
-```
-Create a new WOW token called "Artist Token" with symbol "ART"
-```
+- **EVM Chains**: Base, Ethereum, Arbitrum, Optimism, Polygon, and more
+- **Solana**: Full Solana ecosystem support
+- **Testnets**: Base Sepolia, Ethereum Sepolia, Solana Devnet
 
-4. Check balance:
+## Error Handling
 
-```
-What's my current balance?
-```
+The plugin includes comprehensive error handling:
+
+- **Missing Credentials**: Gracefully handles missing API keys
+- **Network Issues**: Retries and fallback mechanisms  
+- **Transaction Failures**: Detailed error reporting
+- **Wallet Persistence**: Automatic wallet backup and recovery
 
 ## Development
 
-1. Build the plugin:
+### Building
 
 ```bash
-pnpm build
+npm run build
 ```
 
-2. Run in development mode:
+### Testing
 
 ```bash
-pnpm dev
+npm run test
 ```
 
-## Dependencies
+### Linting
 
--   @elizaos/core
--   @coinbase/cdp-agentkit-core
--   @coinbase/cdp-langchain
--   @langchain/core
-
-## Network Support
-
-The plugin supports the following networks:
-
--   Base Sepolia (default)
--   Base Mainnet
-
-Configure the network using the `CDP_AGENT_KIT_NETWORK` environment variable.
+```bash
+npm run lint:fix
+```
 
 ## Troubleshooting
 
-1. If tools are not being triggered:
+### Common Issues
 
-    - Verify CDP API key configuration
-    - Check network settings
-    - Ensure character configuration includes the plugin
+1. **"Missing CDP API credentials"**
+   - Ensure `CDP_API_KEY_ID` and `CDP_API_KEY_SECRET` are set
+   - Check that your API key is active on the Coinbase Developer Platform
 
-2. Common errors:
-    - "Cannot find package": Make sure dependencies are installed
-    - "API key not found": Check environment variables
-    - "Network error": Verify network configuration
+2. **"AgentKit actions will not be available"**
+   - This is a warning - the plugin will load but won't have onchain capabilities
+   - Add your CDP credentials to enable full functionality
+
+3. **Wallet persistence issues**
+   - The plugin automatically saves wallet data to `wallet_data.txt`
+   - Ensure your application has write permissions in its directory
+
+### Getting CDP API Keys
+
+1. Visit [Coinbase Developer Platform](https://portal.cdp.coinbase.com)
+2. Create a new project
+3. Generate API keys
+4. Copy the Key ID and Key Secret to your environment variables
+
+## Links
+
+- [AgentKit Documentation](https://docs.cdp.coinbase.com/agentkit/docs/welcome)
+- [Coinbase Developer Platform](https://portal.cdp.coinbase.com)
+- [ElizaOS Documentation](https://elizaos.github.io/eliza/)
 
 ## License
 
-MIT
+This plugin is licensed under the same terms as the AgentKit framework.
+
+## Contributing
+
+Contributions are welcome! Please see the AgentKit repository for contribution guidelines.
+
+---
+
+**Note**: This plugin is based on Coinbase's AgentKit framework and requires valid CDP API credentials for full functionality.

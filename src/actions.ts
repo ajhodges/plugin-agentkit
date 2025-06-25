@@ -8,12 +8,13 @@ import {
     type State,
     composeContext,
     generateObject,
-} from "@elizaos/core";
-import type { CdpAgentkit } from "@coinbase/cdp-agentkit-core";
-import { CdpToolkit, type Tool } from "@coinbase/cdp-langchain";
+} from '@elizaos/core';
+import type { AgentKit } from '@coinbase/agentkit';
+import { getLangChainTools } from '@coinbase/agentkit-langchain';
+import type { StructuredTool } from '@langchain/core/tools';
 
 type GetAgentKitActionsParams = {
-    getClient: () => Promise<CdpAgentkit>;
+    getClient: () => Promise<AgentKit>;
     config?: {
         networkId?: string;
     };
@@ -25,11 +26,11 @@ type GetAgentKitActionsParams = {
 export async function getAgentKitActions({
     getClient,
 }: GetAgentKitActionsParams): Promise<Action[]> {
-    const agentkit = await getClient();
-    const cdpToolkit = new CdpToolkit(agentkit);
-    const tools = cdpToolkit.getTools();
-    const actions = tools.map((tool: Tool) => ({
-        name: tool.name.toUpperCase(),
+    const agentKit = await getClient();
+    const tools = await getLangChainTools(agentKit);
+
+    const actions = tools.map((tool: StructuredTool) => ({
+        name: tool.name.toUpperCase().replace(/_/g, '_'),
         description: tool.description,
         similes: [],
         validate: async () => true,
@@ -41,44 +42,22 @@ export async function getAgentKitActions({
             callback?: HandlerCallback
         ): Promise<boolean> => {
             try {
-                const client = await getClient();
-                let currentState =
-                    state ?? (await runtime.composeState(message));
-                currentState = await runtime.updateRecentMessageState(
-                    currentState
-                );
+                const _client = await getClient();
+                let currentState = state ?? (await runtime.composeState(message));
+                currentState = await runtime.updateRecentMessageState(currentState);
 
-                const parameterContext = composeParameterContext(
-                    tool,
-                    currentState
-                );
-                const parameters = await generateParameters(
-                    runtime,
-                    parameterContext,
-                    tool
-                );
+                const parameterContext = composeParameterContext(tool, currentState);
+                const parameters = await generateParameters(runtime, parameterContext, tool);
 
-                const result = await executeToolAction(
-                    tool,
-                    parameters,
-                    client
-                );
+                const result = await executeToolAction(tool, parameters);
 
-                const responseContext = composeResponseContext(
-                    tool,
-                    result,
-                    currentState
-                );
-                const response = await generateResponse(
-                    runtime,
-                    responseContext
-                );
+                const responseContext = composeResponseContext(tool, result, currentState);
+                const response = await generateResponse(runtime, responseContext);
 
                 callback?.({ text: response, content: result });
                 return true;
             } catch (error) {
-                const errorMessage =
-                    error instanceof Error ? error.message : String(error);
+                const errorMessage = error instanceof Error ? error.message : String(error);
                 callback?.({
                     text: `Error executing action ${tool.name}: ${errorMessage}`,
                     content: { error: errorMessage },
@@ -91,27 +70,17 @@ export async function getAgentKitActions({
     return actions;
 }
 
-async function executeToolAction(
-    tool: Tool,
-    parameters: unknown,
-    client: CdpAgentkit
-): Promise<unknown> {
-    const toolkit = new CdpToolkit(client);
-    const tools = toolkit.getTools();
-    const selectedTool = tools.find((t) => t.name === tool.name);
-
-    if (!selectedTool) {
-        throw new Error(`Tool ${tool.name} not found`);
-    }
-
-    return await selectedTool.call(parameters);
+async function executeToolAction(tool: StructuredTool, parameters: unknown): Promise<unknown> {
+    return await tool.call(parameters);
 }
 
-function composeParameterContext(tool: Tool, state: State): string {
+function composeParameterContext(tool: StructuredTool, state: State): string {
     const contextTemplate = `{{recentMessages}}
 
 Given the recent messages, extract the following information for the action "${tool.name}":
 ${tool.description}
+
+Schema: ${JSON.stringify(tool.schema, null, 2)}
 `;
     return composeContext({ state, template: contextTemplate });
 }
@@ -119,7 +88,7 @@ ${tool.description}
 async function generateParameters(
     runtime: IAgentRuntime,
     context: string,
-    tool: Tool
+    tool: StructuredTool
 ): Promise<unknown> {
     const { object } = await generateObject({
         runtime,
@@ -131,11 +100,7 @@ async function generateParameters(
     return object;
 }
 
-function composeResponseContext(
-    tool: Tool,
-    result: unknown,
-    state: State
-): string {
+function composeResponseContext(tool: StructuredTool, result: unknown, state: State): string {
     const responseTemplate = `
 # Action Examples
 {{actionExamples}}
@@ -157,7 +122,7 @@ Note that {{agentName}} is capable of reading/seeing/hearing various forms of me
 
 The action "${tool.name}" was executed successfully.
 Here is the result:
-${JSON.stringify(result)}
+${JSON.stringify(result, null, 2)}
 
 {{actions}}
 
@@ -167,10 +132,7 @@ Respond to the message knowing that the action was successful and these were the
     return composeContext({ state, template: responseTemplate });
 }
 
-async function generateResponse(
-    runtime: IAgentRuntime,
-    context: string
-): Promise<string> {
+async function generateResponse(runtime: IAgentRuntime, context: string): Promise<string> {
     return generateText({
         runtime,
         context,
