@@ -143,7 +143,7 @@ async function getAgentKitActions({
 }) {
   console.log("\u{1F527} Setting up AgentKit tools...");
   const agentkit = await getClient2();
-  const tools = getLangChainTools({ agentkit });
+  const tools = getLangChainTools(agentkit);
   console.log(`\u{1F4CB} Found ${tools.length} AgentKit tools`);
   const actions2 = tools.map((tool) => ({
     name: tool.name.toUpperCase(),

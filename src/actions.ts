@@ -125,8 +125,8 @@ export async function getAgentKitActions({
     // Get the AgentKit client
     const agentkit = await getClient();
 
-    // Get LangChain tools from AgentKit
-    const tools = getLangChainTools({ agentkit });
+    // Get LangChain tools from AgentKit - pass AgentKit instance directly
+    const tools = getLangChainTools(agentkit);
 
     console.log(`📋 Found ${tools.length} AgentKit tools`);
 
