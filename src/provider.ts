@@ -1,4 +1,4 @@
-import { Provider, IAgentRuntime, ProviderError } from '@elizaos/core';
+import { Provider, AgentRuntime, ProviderError } from '@elizaos/core';
 import { CdpWalletProvider } from '@coinbase/agentkit';
 import { AgentKit } from '@coinbase/agentkit';
 import * as fs from 'node:fs';

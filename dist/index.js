@@ -72,16 +72,22 @@ var walletProvider = {
 
 // src/actions.ts
 import { getLangChainTools } from "@coinbase/agentkit-langchain";
-var parameterExtractionTemplate = `
-Based on the user's message and the tool description, extract the required parameters in JSON format.
+async function extractParameters(runtime, message, tool) {
+  var _a, _b, _c, _d;
+  console.log(`\u{1F50D} Extracting parameters for tool: ${tool.name}`);
+  const messageText = ((_a = message.content) == null ? void 0 : _a.text) || "";
+  if (!tool.schema || !messageText) {
+    console.log("\u2705 Using empty parameters (tool needs no input)");
+    return {};
+  }
+  try {
+    const toolSchema = tool.schema ? JSON.stringify(tool.schema, null, 2) : "No schema available";
+    const extractionPrompt = `Based on the user's message and the tool description, extract the required parameters in JSON format.
 
-User Message: "{{message.content.text}}"
-Tool: {{toolName}}
-Tool Description: {{toolDescription}}
-
-{{#if toolSchema}}
-Tool Schema: {{toolSchema}}
-{{/if}}
+User Message: "${messageText}"
+Tool: ${tool.name}
+Tool Description: ${tool.description}
+Tool Schema: ${toolSchema}
 
 Instructions:
 - Extract only the parameters that the tool requires
@@ -97,46 +103,47 @@ Example format:
 }
 
 Extract parameters:`;
-async function extractParameters(runtime, message, tool) {
-  var _a, _b;
-  try {
-    console.log(`\u{1F50D} Extracting parameters for tool: ${tool.name}`);
-    const toolSchema = tool.schema ? JSON.stringify(tool.schema, null, 2) : void 0;
-    const extractionPrompt = parameterExtractionTemplate.replace("{{message.content.text}}", ((_a = message.content) == null ? void 0 : _a.text) || "").replace("{{toolName}}", tool.name).replace("{{toolDescription}}", tool.description).replace("{{toolSchema}}", toolSchema || "No schema available");
-    const response = await runtime.generateText({
-      context: extractionPrompt,
-      modelClass: "SMALL"
+    const response = await runtime.useModel({
+      messages: [{ role: "user", content: extractionPrompt }]
     });
-    const cleanedResponse = response.trim().replace(/^```json\s*|\s*```$/g, "");
+    const responseText = ((_d = (_c = (_b = response.choices) == null ? void 0 : _b[0]) == null ? void 0 : _c.message) == null ? void 0 : _d.content) || response.content || "";
+    const cleanedResponse = responseText.trim().replace(/^```json\s*|\s*```$/g, "");
     let parameters;
     try {
       parameters = JSON.parse(cleanedResponse);
     } catch (_parseError) {
       console.warn(`\u26A0\uFE0F Failed to parse parameters as JSON: ${cleanedResponse}`);
-      parameters = extractSimpleParameters(((_b = message.content) == null ? void 0 : _b.text) || "");
+      parameters = extractSimpleParameters(messageText);
     }
     console.log("\u2705 Extracted parameters:", parameters);
     return parameters;
   } catch (error) {
-    console.error("\u274C Error extracting parameters:", error);
-    return {};
+    console.warn("\u26A0\uFE0F Error in parameter extraction, using simple fallback:", error);
+    return extractSimpleParameters(messageText);
   }
 }
-function extractSimpleParameters(text) {
-  const params = {};
+function extractSimpleParameters(messageText) {
+  const parameters = {};
   const patterns = {
-    amount: /(\d+(?:\.\d+)?)\s*(?:tokens?|coins?|eth|matic|sol)?/i,
+    amount: /(\d+(?:\.\d+)?)\s*(?:tokens?|coins?|eth|matic|sol|usdc|usdt)?/i,
     address: /(0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})/,
-    recipient: /(?:to|send to|transfer to)\s+([a-zA-Z0-9]{32,44})/i,
-    symbol: /(?:symbol|ticker)\s+([A-Z]{2,6})/i
+    recipient: /(?:to|send to|transfer to|recipient)\s*:?\s*([a-zA-Z0-9]{32,44}|0x[a-fA-F0-9]{40})/i,
+    symbol: /(?:symbol|ticker|token)\s*:?\s*([A-Z]{2,6})/i
   };
   for (const [key, pattern] of Object.entries(patterns)) {
-    const match = text.match(pattern);
-    if (match) {
-      params[key] = match[1];
+    if (key === "amount") {
+      const match = messageText.match(pattern);
+      if (match) parameters.amount = Number.parseFloat(match[1]);
+    } else {
+      const match = messageText.match(pattern);
+      if (match) parameters[key] = match[1];
     }
   }
-  return params;
+  if (Object.keys(parameters).length === 0 && messageText) {
+    parameters.query = messageText;
+  }
+  console.log("\u2705 Simple parameter extraction result:", parameters);
+  return parameters;
 }
 async function getAgentKitActions({
   getClient: getClient2
@@ -262,23 +269,27 @@ async function createFallbackTools(agentkit) {
 }
 
 // src/index.ts
-console.log("\n\u250C\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2510");
-console.log("\u2502          AGENTKIT PLUGIN               \u2502");
-console.log("\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524");
-console.log("\u2502  Initializing AgentKit Plugin...       \u2502");
-console.log("\u2502  Version: 0.25.6-alpha.8 (Runtime Fix)\u2502");
-console.log("\u2514\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2518");
-var initializeActions = async () => {
-  try {
-    const apiKeyId = process.env.CDP_API_KEY_ID;
-    const apiKeySecret = process.env.CDP_API_KEY_SECRET;
-    if (!apiKeyId || !apiKeySecret) {
-      console.warn("\u26A0\uFE0F Missing CDP API credentials - AgentKit actions will not be available");
-      console.warn(
-        "   Please set CDP_API_KEY_ID and CDP_API_KEY_SECRET environment variables"
-      );
-      return [];
+var requiredEnvVars = ["CDP_API_KEY_ID", "CDP_API_KEY_SECRET"];
+function validateEnvironment() {
+  const missingVars = requiredEnvVars.filter((varName) => !process.env[varName]);
+  if (missingVars.length > 0) {
+    console.error("\u274C Missing required environment variables for AgentKit plugin:");
+    for (const varName of missingVars) {
+      console.error(`   - ${varName}`);
     }
+    console.error("\n\u{1F4DD} Please set these environment variables to use the AgentKit plugin.");
+    console.error("   Example: CDP_API_KEY_ID=your_key_id CDP_API_KEY_SECRET=your_secret");
+    throw new Error(`Missing required environment variables: ${missingVars.join(", ")}`);
+  }
+}
+async function initializeActions() {
+  try {
+    console.log("\n\u250C\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2510");
+    console.log("\u2502          AGENTKIT PLUGIN               \u2502");
+    console.log("\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524");
+    console.log("\u2502  Initializing AgentKit Plugin...       \u2502");
+    console.log("\u2502  Version: 0.25.6-alpha.18 (1.x Compat)\u2502");
+    console.log("\u2514\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2518");
     console.log("\u{1F680} Initializing AgentKit client...");
     const actions2 = await getAgentKitActions({
       getClient
@@ -288,17 +299,18 @@ var initializeActions = async () => {
     return actions2;
   } catch (error) {
     console.error("\u274C Failed to initialize AgentKit actions:", error);
-    return [];
+    throw error;
   }
-};
+}
+validateEnvironment();
 var actions = await initializeActions();
 var agentKitPlugin = {
-  name: "[AgentKit] Integration",
-  description: "AgentKit integration plugin for onchain AI agent actions",
+  name: "agentkit",
+  description: "AgentKit integration for ElizaOS - enables blockchain and crypto operations",
+  actions,
   providers: [walletProvider],
   evaluators: [],
-  services: [],
-  actions
+  services: []
 };
 var index_default = agentKitPlugin;
 export {
