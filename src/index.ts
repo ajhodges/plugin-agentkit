@@ -25,7 +25,7 @@ async function initializeActions() {
         console.log('│          AGENTKIT PLUGIN               │');
         console.log('├────────────────────────────────────────┤');
         console.log('│  Initializing AgentKit Plugin...       │');
-        console.log('│  Version: 0.25.6-alpha.18 (1.x Compat)│');
+        console.log('│  Version: 0.25.6-alpha.19 (1.x Compat)│');
         console.log('└════════════════════════════════════════┘');
 
         console.log('🚀 Initializing AgentKit client...');

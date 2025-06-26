@@ -232,7 +232,10 @@ async function getAgentKitActions({
 async function createFallbackTools(agentkit) {
   console.log("\u{1F504} Creating fallback tools...");
   try {
-    console.log("\u{1F50D} Available methods on AgentKit:", Object.getOwnPropertyNames(Object.getPrototypeOf(agentkit)));
+    console.log(
+      "\u{1F50D} Available methods on AgentKit:",
+      Object.getOwnPropertyNames(Object.getPrototypeOf(agentkit))
+    );
     const agentkitWithMethods = agentkit;
     if ("getActions" in agentkit && typeof agentkitWithMethods.getActions === "function") {
       console.log("\u{1F50D} Found getActions method, trying it...");
@@ -288,7 +291,7 @@ async function initializeActions() {
     console.log("\u2502          AGENTKIT PLUGIN               \u2502");
     console.log("\u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524");
     console.log("\u2502  Initializing AgentKit Plugin...       \u2502");
-    console.log("\u2502  Version: 0.25.6-alpha.18 (1.x Compat)\u2502");
+    console.log("\u2502  Version: 0.25.6-alpha.19 (1.x Compat)\u2502");
     console.log("\u2514\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2518");
     console.log("\u{1F680} Initializing AgentKit client...");
     const actions2 = await getAgentKitActions({
