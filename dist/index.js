@@ -143,8 +143,32 @@ async function getAgentKitActions({
 }) {
   console.log("\u{1F527} Setting up AgentKit tools...");
   const agentkit = await getClient2();
-  const tools = getLangChainTools(agentkit);
-  console.log(`\u{1F4CB} Found ${tools.length} AgentKit tools`);
+  console.log("\u{1F50D} AgentKit instance:", agentkit);
+  console.log("\u{1F50D} AgentKit constructor:", agentkit.constructor.name);
+  let tools;
+  try {
+    console.log("\u{1F50D} Calling getLangChainTools...");
+    const toolsResult = await getLangChainTools(agentkit);
+    console.log("\u{1F50D} getLangChainTools result:", toolsResult);
+    console.log("\u{1F50D} Type of result:", typeof toolsResult);
+    if (!toolsResult) {
+      console.error("\u274C getLangChainTools returned undefined/null");
+      throw new Error("getLangChainTools returned undefined/null");
+    }
+    if (!Array.isArray(toolsResult)) {
+      console.error("\u274C getLangChainTools did not return an array:", toolsResult);
+      throw new Error(`getLangChainTools returned ${typeof toolsResult}, expected array`);
+    }
+    tools = toolsResult;
+    console.log(`\u{1F4CB} Found ${tools.length} AgentKit tools`);
+    tools.forEach((tool, index) => {
+      console.log(`\u{1F527} Tool ${index + 1}: ${tool.name} - ${tool.description}`);
+    });
+  } catch (error) {
+    console.error("\u274C Error calling getLangChainTools:", error);
+    console.log("\u{1F504} Attempting to create basic wallet tools as fallback...");
+    tools = await createFallbackTools(agentkit);
+  }
   const actions2 = tools.map((tool) => ({
     name: tool.name.toUpperCase(),
     similes: [],
@@ -197,6 +221,44 @@ async function getAgentKitActions({
     }))
   );
   return actions2;
+}
+async function createFallbackTools(agentkit) {
+  console.log("\u{1F504} Creating fallback tools...");
+  try {
+    console.log("\u{1F50D} Available methods on AgentKit:", Object.getOwnPropertyNames(Object.getPrototypeOf(agentkit)));
+    const agentkitWithMethods = agentkit;
+    if ("getActions" in agentkit && typeof agentkitWithMethods.getActions === "function") {
+      console.log("\u{1F50D} Found getActions method, trying it...");
+      const actions2 = agentkitWithMethods.getActions();
+      console.log("\u{1F50D} getActions result:", actions2);
+    }
+    const walletInfoTool = {
+      name: "get_wallet_info",
+      description: "Get wallet information including address and balance",
+      schema: {
+        type: "object",
+        properties: {},
+        required: []
+      },
+      invoke: async () => {
+        try {
+          const agentkitWithWallet = agentkit;
+          const walletProvider2 = agentkitWithWallet._walletProvider;
+          if (walletProvider2 == null ? void 0 : walletProvider2.address) {
+            return `Wallet Address: ${walletProvider2.address}`;
+          }
+          return "Wallet information not available";
+        } catch (error) {
+          return `Error getting wallet info: ${error}`;
+        }
+      }
+    };
+    console.log("\u2705 Created fallback wallet info tool");
+    return [walletInfoTool];
+  } catch (error) {
+    console.error("\u274C Error creating fallback tools:", error);
+    return [];
+  }
 }
 
 // src/index.ts

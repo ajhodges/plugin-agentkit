@@ -124,11 +124,43 @@ export async function getAgentKitActions({
 
     // Get the AgentKit client
     const agentkit = await getClient();
+    console.log('🔍 AgentKit instance:', agentkit);
+    console.log('🔍 AgentKit constructor:', agentkit.constructor.name);
 
     // Get LangChain tools from AgentKit - pass AgentKit instance directly
-    const tools = getLangChainTools(agentkit);
-
-    console.log(`📋 Found ${tools.length} AgentKit tools`);
+    let tools: StructuredTool[];
+    
+    try {
+        console.log('🔍 Calling getLangChainTools...');
+        const toolsResult = await getLangChainTools(agentkit);
+        console.log('🔍 getLangChainTools result:', toolsResult);
+        console.log('🔍 Type of result:', typeof toolsResult);
+        
+        if (!toolsResult) {
+            console.error('❌ getLangChainTools returned undefined/null');
+            throw new Error('getLangChainTools returned undefined/null');
+        }
+        
+        if (!Array.isArray(toolsResult)) {
+            console.error('❌ getLangChainTools did not return an array:', toolsResult);
+            throw new Error(`getLangChainTools returned ${typeof toolsResult}, expected array`);
+        }
+        
+        tools = toolsResult;
+        console.log(`📋 Found ${tools.length} AgentKit tools`);
+        
+        // Log each tool for debugging
+        tools.forEach((tool, index) => {
+            console.log(`🔧 Tool ${index + 1}: ${tool.name} - ${tool.description}`);
+        });
+        
+    } catch (error) {
+        console.error('❌ Error calling getLangChainTools:', error);
+        console.log('🔄 Attempting to create basic wallet tools as fallback...');
+        
+        // Fallback: Create basic wallet tools manually
+        tools = await createFallbackTools(agentkit);
+    }
 
     // Create ElizaOS actions from AgentKit tools
     const actions = tools.map((tool: StructuredTool) => ({
@@ -201,4 +233,55 @@ export async function getAgentKitActions({
     );
 
     return actions;
+}
+
+/**
+ * Create fallback tools when getLangChainTools fails
+ */
+async function createFallbackTools(agentkit: AgentKit): Promise<StructuredTool[]> {
+    console.log('🔄 Creating fallback tools...');
+    
+    // Try to get available actions from the AgentKit instance
+    try {
+        // Check if AgentKit has any methods we can use to get actions
+        console.log('🔍 Available methods on AgentKit:', Object.getOwnPropertyNames(Object.getPrototypeOf(agentkit)));
+        
+        // Try different approaches to get tools
+        const agentkitWithMethods = agentkit as AgentKit & { getActions?: () => unknown };
+        if ('getActions' in agentkit && typeof agentkitWithMethods.getActions === 'function') {
+            console.log('🔍 Found getActions method, trying it...');
+            const actions = agentkitWithMethods.getActions();
+            console.log('🔍 getActions result:', actions);
+        }
+        
+        // Create a basic wallet info tool as fallback
+        const walletInfoTool: StructuredTool = {
+            name: 'get_wallet_info',
+            description: 'Get wallet information including address and balance',
+            schema: {
+                type: 'object',
+                properties: {},
+                required: [],
+            },
+            invoke: async () => {
+                try {
+                    const agentkitWithWallet = agentkit as AgentKit & { _walletProvider?: { address?: string } };
+                    const walletProvider = agentkitWithWallet._walletProvider;
+                    if (walletProvider?.address) {
+                        return `Wallet Address: ${walletProvider.address}`;
+                    }
+                    return 'Wallet information not available';
+                } catch (error) {
+                    return `Error getting wallet info: ${error}`;
+                }
+            },
+        } as StructuredTool;
+        
+        console.log('✅ Created fallback wallet info tool');
+        return [walletInfoTool];
+        
+    } catch (error) {
+        console.error('❌ Error creating fallback tools:', error);
+        return [];
+    }
 }
